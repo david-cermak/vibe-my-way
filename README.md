@@ -24,7 +24,15 @@ Vibe My Way analyzes your commit history using large language models to extract 
 
 ## 🛠️ Getting Started
 
-*Coming soon*
+1. Clone the repository
+2. Copy `.env.example` to `.env` and configure your environment variables:
+   ```
+   API_KEY=your_api_key_here
+   PROJECT_PATH=/path/to/your/project/repository
+   DIRECTORY=path/to/specific/directory/to/analyze
+   ```
+3. Install the required dependencies
+4. Run the provided scripts to analyze your commit history
 
 ## 📝 License
 
