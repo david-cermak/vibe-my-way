@@ -4,9 +4,24 @@ Script to read git commit history for a specific directory.
 """
 import os
 import re
-from typing import Dict, List
+import sys
+import argparse
+from typing import Dict, List, Optional, Tuple, Any
 from dotenv import load_dotenv
 import sh
+
+# Import GitLab integration module if available
+try:
+    from gitlab_integration import get_gitlab_client, get_merge_request_details
+    GITLAB_MODULE_AVAILABLE = True
+except ImportError:
+    # Try importing from the current directory
+    try:
+        from src.gitlab_integration import get_gitlab_client, get_merge_request_details
+        GITLAB_MODULE_AVAILABLE = True
+    except ImportError:
+        GITLAB_MODULE_AVAILABLE = False
+        print("Warning: GitLab integration module not found. GitLab functionality will be disabled.")
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +29,7 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 PROJECT_PATH = os.getenv("PROJECT_PATH")
 DIRECTORY = os.getenv("DIRECTORY")
+GITLAB_PROJECT_ID = os.getenv("GITLAB_PROJECT_ID")
 
 def get_commit_history(project_path: str, directory: str) -> Dict[str, Dict]:
     """
@@ -156,20 +172,35 @@ def extract_references(commit_msg: str) -> Dict[str, List[str]]:
 
 def main():
     """Main function to run the script."""
-    if not all([PROJECT_PATH, DIRECTORY]):
-        print("Error: PROJECT_PATH and DIRECTORY environment variables are required.")
-        print("Please set them in a .env file or environment.")
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Analyze git commit history and merge requests')
+    parser.add_argument('--first-mr-only', action='store_true', help='Process only the first merge request (for testing)')
+    parser.add_argument('--project-path', help='Path to the git repository')
+    parser.add_argument('--directory', help='Directory within the repository to analyze')
+    parser.add_argument('--gitlab-project-id', help='GitLab project ID')
+    args = parser.parse_args()
+
+    # Override environment variables with command line arguments if provided
+    project_path = args.project_path or PROJECT_PATH
+    directory = args.directory or DIRECTORY
+    gitlab_project_id = args.gitlab_project_id or GITLAB_PROJECT_ID
+
+    if not all([project_path, directory]):
+        print("Error: PROJECT_PATH and DIRECTORY are required.")
+        print("Please set them in a .env file or pass them as command line arguments.")
         print("Example .env file:")
-        print("API_KEY=sk***")
         print("PROJECT_PATH=/path/to/project/repo")
         print("DIRECTORY=path/to/specific/directory")
+        print("GITLAB_PROJECT_ID=123")
+        print("\nOr use command line arguments:")
+        print("python src/commit_reader.py --project-path /path/to/project/repo --directory path/to/specific/directory")
         return
 
-    result = get_commit_history(PROJECT_PATH, DIRECTORY)
+    result = get_commit_history(project_path, directory)
     commits = result["commits"]
     merge_requests = result["merge_requests"]
 
-    print(f"\nFound {len(commits)} commits in {DIRECTORY}:")
+    print(f"\nFound {len(commits)} commits in {directory}:")
     for commit_id, commit_data in commits.items():
         commit_type = "Merge commit" if commit_data["is_merge"] else "Commit"
         print(f"{commit_type} {commit_id}: {commit_data['message']}")
@@ -182,11 +213,46 @@ def main():
                 if ref_ids:
                     print(f"    {ref_type.capitalize()}: {', '.join(ref_ids)}")
 
-    print(f"\nFound {len(merge_requests)} merge requests in {DIRECTORY}:")
+    print(f"\nFound {len(merge_requests)} merge requests in {directory}:")
+
+    # Get GitLab integration if configured and available
+    gitlab_info = None
+    if GITLAB_MODULE_AVAILABLE:
+        gitlab_info = get_gitlab_client(gitlab_project_id)
+
+    # Keep track of whether we've processed an MR yet (for first-mr-only option)
+    processed_mr = False
+
     for mr_id, mr_data in merge_requests.items():
+        # If we're only processing the first MR and we've already processed one, break
+        if args.first_mr_only and processed_mr:
+            print("\nStopping after first merge request due to --first-mr-only flag")
+            break
+
         print(f"\nMR !{mr_id}:")
         print(f"  Merge commit: {mr_data['merge_commit']}")
         print(f"  Message: {mr_data['message']}")
+
+        # If GitLab integration is configured, fetch and display MR details
+        if gitlab_info:
+            gl, project = gitlab_info
+            mr_details = get_merge_request_details(project, mr_id)
+
+            if mr_details:
+                print(f"  Title: {mr_details['title']}")
+                print(f"  URL: {mr_details['web_url']}")
+                print(f"  State: {mr_details['state']}")
+                print(f"  Author: {mr_details['author']}")
+                print(f"  Created: {mr_details['created_at']}")
+
+                if mr_details['description']:
+                    # Limit description to 5 lines max
+                    desc_lines = mr_details['description'].split("\n")[:5]
+                    print("  Description:")
+                    for line in desc_lines:
+                        print(f"    {line}")
+                    if len(mr_details['description'].split("\n")) > 5:
+                        print("    [...]")
 
         if mr_data['related_commits']:
             print(f"  Related commits ({len(mr_data['related_commits'])}):")
@@ -197,6 +263,9 @@ def main():
                     print(f"    {commit}")
         else:
             print("  No related commits found")
+
+        # Mark that we've processed an MR
+        processed_mr = True
 
 if __name__ == "__main__":
     main()
