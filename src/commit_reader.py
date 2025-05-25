@@ -244,16 +244,21 @@ def main():
                 print(f"  State: {mr_details['state']}")
                 print(f"  Author: {mr_details['author']}")
                 print(f"  Created: {mr_details['created_at']}")
+                print(f"  Updated: {mr_details['updated_at']}")
 
                 if mr_details['description']:
-                    # Limit description to 5 lines max
-                    desc_lines = mr_details['description'].split("\n")[:5]
                     print("  Description:")
-                    for line in desc_lines:
-                        print(f"    {line}")
-                    if len(mr_details['description'].split("\n")) > 5:
-                        print("    [...]")
+                    print(f"    {mr_details['description']}")
 
+                print("\n  Debug Information:")
+                print(f"    Discussions: {mr_details['debug_info']['discussions_count']}")
+                print(f"    Changes: {mr_details['debug_info']['changes_count']}")
+                print(f"    Commits: {mr_details['debug_info']['commits_count']}")
+                print(f"    Description Length: {mr_details['debug_info']['description_length']} chars")
+
+                print("\n  Full Details (Markdown):")
+                for line in mr_details['markdown'].split('\n'):
+                    print(f"    {line}")
         if mr_data['related_commits']:
             print(f"  Related commits ({len(mr_data['related_commits'])}):")
             for commit in mr_data['related_commits']:
