@@ -288,3 +288,21 @@ def get_merge_request_details(project: Any, mr_id: str) -> Dict:
         import traceback
         traceback.print_exc()
         return {}
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Fetch and print GitLab Merge Request details in Markdown format.")
+    parser.add_argument("project_id", help="GitLab project ID (numeric or path)")
+    parser.add_argument("mr_number", help="Merge Request number (IID)")
+    args = parser.parse_args()
+
+    client_project = get_gitlab_client(args.project_id)
+    if not client_project:
+        print("Failed to initialize GitLab client or project. Check your configuration.")
+        exit(1)
+    gl, project = client_project
+    details = get_merge_request_details(project, args.mr_number)
+    if not details or "markdown" not in details:
+        print(f"Failed to fetch details for MR !{args.mr_number} in project {args.project_id}.")
+        exit(1)
+    print(details["markdown"])
