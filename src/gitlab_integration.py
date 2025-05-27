@@ -14,6 +14,9 @@ except ImportError:
     print("Warning: python-gitlab module not installed. GitLab integration will be disabled.")
     print("To enable GitLab integration, install it with: pip install python-gitlab")
 
+# Import the Agent class for AI processing
+from agent import Agent
+
 def get_gitlab_client(project_id: Optional[str] = None) -> Optional[Tuple[Any, Any]]:
     """
     Initialize the GitLab client and get the project.
@@ -289,20 +292,103 @@ def get_merge_request_details(project: Any, mr_id: str) -> Dict:
         traceback.print_exc()
         return {}
 
+def generate_learning_sheet(mr_details: Dict) -> str:
+    """
+    Generate a learning sheet from MR details using AI.
+
+    Args:
+        mr_details: Dictionary containing MR details with markdown
+
+    Returns:
+        String containing the AI-generated learning sheet
+    """
+    if not mr_details or "markdown" not in mr_details:
+        return "Error: No MR details provided or markdown not available."
+
+    # Create the system prompt for learning sheet generation
+    system_prompt = """You are an expert software engineering mentor tasked with creating learning sheets from merge request data.
+
+Your goal is to analyze the provided merge request information and create a comprehensive learning sheet that future engineers and AI agents can use to understand the solution approach, coding patterns, and best practices demonstrated in this merge request.
+
+Please create a learning sheet in markdown format with the following sections:
+
+## Story/Issue
+- Summarize the problem or feature that was being addressed
+- Extract the business context and requirements
+- Identify the key challenges or constraints
+
+## Solution
+- Describe the technical approach taken
+- Highlight key architectural decisions
+- Explain the implementation strategy
+- Note any design patterns or methodologies used
+
+## Discussion
+- Summarize important conversations and decisions from code reviews
+- Extract key insights from reviewer feedback
+- Note any alternative approaches that were considered
+- Highlight lessons learned or best practices discussed
+
+## References
+- List relevant files, functions, or components modified
+- Note any external resources, documentation, or standards referenced
+- Include links to related issues, documentation, or external resources mentioned
+
+Focus on extracting actionable insights and patterns that would be valuable for future similar work. Be concise but comprehensive, and ensure the learning sheet serves as a practical reference for engineering best practices."""
+
+    # Initialize the agent with the learning sheet system prompt
+    agent = Agent(system_prompt=system_prompt)
+
+    # Use the markdown content as the user prompt
+    user_prompt = f"Please analyze this merge request and create a learning sheet:\n\n{mr_details['markdown']}"
+
+    # Generate the learning sheet
+    try:
+        learning_sheet = agent.generate_response(user_prompt)
+        return learning_sheet
+    except Exception as e:
+        return f"Error generating learning sheet: {str(e)}"
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Fetch and print GitLab Merge Request details in Markdown format.")
+    parser = argparse.ArgumentParser(description="Fetch GitLab Merge Request details and generate learning sheet.")
     parser.add_argument("project_id", help="GitLab project ID (numeric or path)")
     parser.add_argument("mr_number", help="Merge Request number (IID)")
+    parser.add_argument("--learning-sheet", action="store_true",
+                       help="Generate AI learning sheet from MR details")
+    parser.add_argument("--output-file", help="Output file to save the learning sheet")
     args = parser.parse_args()
 
     client_project = get_gitlab_client(args.project_id)
     if not client_project:
         print("Failed to initialize GitLab client or project. Check your configuration.")
         exit(1)
+
     gl, project = client_project
     details = get_merge_request_details(project, args.mr_number)
     if not details or "markdown" not in details:
         print(f"Failed to fetch details for MR !{args.mr_number} in project {args.project_id}.")
         exit(1)
-    print(details["markdown"])
+
+    if args.learning_sheet:
+        print("Generating learning sheet...")
+        learning_sheet = generate_learning_sheet(details)
+
+        if args.output_file:
+            try:
+                with open(args.output_file, 'w', encoding='utf-8') as f:
+                    f.write(learning_sheet)
+                print(f"Learning sheet saved to: {args.output_file}")
+            except Exception as e:
+                print(f"Error saving learning sheet to file: {e}")
+                print("\n" + "="*50)
+                print("LEARNING SHEET")
+                print("="*50)
+                print(learning_sheet)
+        else:
+            print("\n" + "="*50)
+            print("LEARNING SHEET")
+            print("="*50)
+            print(learning_sheet)
+    else:
+        print(details["markdown"])

@@ -20,6 +20,7 @@ Vibe My Way analyzes your commit history using large language models to extract 
 
 - **Personalized Code Suggestions**: Get recommendations that align with your coding style and previous decisions
 - **Context-Aware Assistance**: The assistant understands the broader context of your project from your commit history
+- **AI Learning Sheets**: Generate comprehensive learning documents from merge requests for knowledge sharing
 - **Seamless Integration**: Works alongside your existing coding workflow
 
 ## 🛠️ Getting Started
@@ -28,8 +29,11 @@ Vibe My Way analyzes your commit history using large language models to extract 
 2. Copy `.env.example` to `.env` and configure your environment variables:
    ```
    API_KEY=your_api_key_here
+   BASE_URL=https://api.openai.com/v1  # Optional, defaults to OpenAI
+   MODEL=gpt-4-0125-preview  # Optional, defaults to this model
    PROJECT_PATH=/path/to/your/project/repository
    DIRECTORY=path/to/specific/directory/to/analyze
+   GITLAB_PROJECT_ID=123  # Your GitLab project ID
    ```
 3. Install the required dependencies
 4. Run the provided scripts to analyze your commit history
@@ -38,17 +42,18 @@ Vibe My Way analyzes your commit history using large language models to extract 
 
 See the [LICENSE](LICENSE) file for details.
 
-# Git Commit History Reader
+# Git Commit History Reader & AI Learning Sheet Generator
 
-This script analyzes Git commit history for a specific directory, identifies merge requests, and groups related commits.
+This script analyzes Git commit history for a specific directory, identifies merge requests, and can generate AI-powered learning sheets from merge request data.
 
 ## Features
 
 - Parses Git commit history including merge commits
 - Identifies GitLab merge requests
 - Groups commits by merge request
-- Retrieves additional details from GitLab API (title, description, author, etc.)
-- Modular design with separate GitLab integration module
+- Retrieves comprehensive details from GitLab API (title, description, author, discussions, changes, etc.)
+- **NEW**: AI-powered learning sheet generation from merge request data
+- Modular design with separate GitLab integration and AI agent modules
 
 ## Requirements
 
@@ -56,6 +61,7 @@ This script analyzes Git commit history for a specific directory, identifies mer
 - Required Python packages:
   - `python-dotenv`
   - `sh`
+  - `openai` (for AI learning sheet generation)
   - `python-gitlab` (optional, for GitLab integration)
 
 ## Installation
@@ -63,7 +69,7 @@ This script analyzes Git commit history for a specific directory, identifies mer
 1. Clone this repository
 2. Install required packages:
    ```
-   pip install python-dotenv sh
+   pip install python-dotenv sh openai
    pip install python-gitlab  # Optional, for GitLab integration
    ```
 
@@ -77,6 +83,11 @@ Create a `.env` file in the project root with the following variables:
 PROJECT_PATH=/path/to/git/repository
 DIRECTORY=path/within/repo/to/analyze
 GITLAB_PROJECT_ID=123  # Your GitLab project ID
+
+# AI Configuration (for learning sheet generation)
+API_KEY=your_openai_api_key_here
+BASE_URL=https://api.openai.com/v1  # Optional, defaults to OpenAI
+MODEL=gpt-4-0125-preview  # Optional, defaults to this model
 ```
 
 ### GitLab Configuration
@@ -101,13 +112,15 @@ You can also use other configuration methods supported by python-gitlab, such as
 
 ## Usage
 
-Run the script:
+### Commit History Analysis
 
-```
+Run the main commit reader script:
+
+```bash
 python src/commit_reader.py
 ```
 
-### Command Line Arguments
+#### Command Line Arguments
 
 The script supports the following command line arguments:
 
@@ -123,9 +136,61 @@ Example:
 python src/commit_reader.py --project-path /path/to/repo --directory src/components --first-mr-only
 ```
 
+### GitLab Merge Request Analysis & AI Learning Sheets
+
+**NEW**: Generate detailed merge request analysis and AI-powered learning sheets:
+
+```bash
+# Fetch and display MR details in markdown format
+python src/gitlab_integration.py PROJECT_ID MR_NUMBER
+
+# Generate AI learning sheet and display it
+python src/gitlab_integration.py PROJECT_ID MR_NUMBER --learning-sheet
+
+# Generate learning sheet and save to file
+python src/gitlab_integration.py PROJECT_ID MR_NUMBER --learning-sheet --output-file learning_sheet.md
+```
+
+#### Examples:
+
+```bash
+# View MR details for project 123, MR !456
+python src/gitlab_integration.py 123 456
+
+# Generate learning sheet for the same MR
+python src/gitlab_integration.py 123 456 --learning-sheet
+
+# Save learning sheet to a file
+python src/gitlab_integration.py 123 456 --learning-sheet --output-file mr_456_learning_sheet.md
+```
+
+## AI Learning Sheets
+
+The AI learning sheet feature analyzes merge request data and generates comprehensive learning documents with the following sections:
+
+### **Story/Issue**
+- Problem context and business requirements
+- Key challenges and constraints identified
+
+### **Solution**
+- Technical approach and architectural decisions
+- Implementation strategy and design patterns used
+
+### **Discussion**
+- Code review insights and important decisions
+- Alternative approaches considered
+- Best practices and lessons learned
+
+### **References**
+- Modified files and components
+- External resources and documentation
+- Related issues and links
+
+These learning sheets serve as valuable knowledge artifacts for future engineers and AI agents to understand solution patterns and coding practices.
+
 ## Output
 
-The script outputs:
+### Commit Reader Output:
 - List of all commits in the specified directory
 - References to external tools (GitHub, GitLab, Jira) found in commit messages
 - Merge requests with their related commits
@@ -135,13 +200,22 @@ The script outputs:
   - State and author information
   - Creation date
 
+### GitLab Integration Output:
+- Comprehensive merge request details in markdown format
+- All discussions and code review comments
+- Complete diff information for all changed files
+- Commit history and approval information
+- **NEW**: AI-generated learning sheets with structured insights
+
 ## Project Structure
 
 - `src/commit_reader.py`: Main script for analyzing git commit history
-- `src/gitlab_integration.py`: Module for GitLab API integration
+- `src/gitlab_integration.py`: Module for GitLab API integration and AI learning sheet generation
+- `src/agent.py`: AI agent class for interacting with language models
 
-## Example
+## Example Output
 
+### Commit Reader:
 ```
 $ python src/commit_reader.py --first-mr-only
 
@@ -164,4 +238,31 @@ MR !15180:
     b7a99f46587a69a2cd07e7616c3bb30b7b1a6edf: mdns: allow multiple instances with same service type
 
 Stopping after first merge request due to --first-mr-only flag
+```
+
+### AI Learning Sheet Generation:
+```bash
+$ python src/gitlab_integration.py 123 456 --learning-sheet
+
+Generating learning sheet...
+
+==================================================
+LEARNING SHEET
+==================================================
+
+# Learning Sheet: Feature Implementation
+
+## Story/Issue
+The merge request addressed the need to implement multiple mDNS service instances...
+
+## Solution
+The technical approach involved modifying the core mDNS service handler...
+
+## Discussion
+Key insights from code review discussions included...
+
+## References
+- Modified files: `src/mdns/service.c`, `include/mdns.h`
+- Related documentation: mDNS RFC 6763
+- External resources: ESP-IDF mDNS component documentation
 ```
