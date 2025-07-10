@@ -349,15 +349,146 @@ Focus on extracting actionable insights and patterns that would be valuable for 
     except Exception as e:
         return f"Error generating learning sheet: {str(e)}"
 
+def generate_code_review(mr_details: Dict, additional_context: Optional[str] = None) -> str:
+    """
+    Generate a detailed code review from MR details using AI.
+
+    Args:
+        mr_details: Dictionary containing MR details with markdown
+        additional_context: Optional additional context to include in the review
+
+    Returns:
+        String containing the AI-generated code review
+    """
+    if not mr_details or "markdown" not in mr_details:
+        return "Error: No MR details provided or markdown not available."
+
+    # Create the system prompt for code review generation
+    system_prompt = """You are an expert software engineer and code reviewer tasked with providing detailed code reviews of merge requests.
+
+Your goal is to analyze the provided merge request information and create a comprehensive code review that covers all aspects of the code changes, discussions, and implementation details.
+
+Please create a detailed code review in markdown format with the following sections:
+
+## 1. Potential Issues
+- Identify any bugs, security vulnerabilities, or performance issues
+- Point out code smells, anti-patterns, or maintainability concerns
+- Highlight missing error handling or edge cases
+- Note any potential race conditions or concurrency issues
+
+## 2. Questions
+- List questions that need clarification from the author
+- Ask about design decisions that aren't clearly explained
+- Inquire about missing context or requirements
+- Question any unclear or ambiguous code sections
+
+## 3. TODO List
+- Items that need to be reviewed in more detail with additional context
+- Code sections that require deeper analysis
+- Areas where more information is needed before final approval
+- Dependencies or related code that should be examined
+
+## 4. Task List
+- Next steps for reviewing and testing the code
+- Manual testing scenarios to validate the changes
+- Integration testing requirements
+- Performance testing considerations
+- Documentation updates needed
+
+## 5. Overall Learnings
+- Summary of what we learned about the codebase from these changes
+- Key insights about the system architecture or design patterns
+- Understanding of the problem domain and solution approach
+- Lessons learned that could apply to future development
+
+Focus on being thorough, constructive, and educational. Provide specific examples from the code when possible, and suggest concrete improvements or alternatives."""
+
+    # Initialize the agent with the code review system prompt
+    agent = Agent(system_prompt=system_prompt)
+
+    # Build the user prompt with MR details and optional additional context
+    user_prompt = "Please analyze this merge request and provide a detailed code review:\n\n"
+    user_prompt += mr_details['markdown']
+
+    if additional_context:
+        user_prompt += "\n\n## Additional Context\n\n"
+        user_prompt += additional_context
+
+    # Generate the code review
+    try:
+        code_review = agent.generate_response(user_prompt)
+        return code_review
+    except Exception as e:
+        return f"Error generating code review: {str(e)}"
+
+def test_agent() -> str:
+    """
+    Test the Agent with a simple prompt to verify it's working.
+
+    Returns:
+        String containing the agent's response or error message
+    """
+    try:
+        # Initialize the agent with a simple system prompt
+        agent = Agent(system_prompt="You are a helpful assistant. Respond concisely and clearly.")
+
+        # Test with a simple prompt
+        test_prompt = "Hello! Please confirm that you are working correctly and can process requests."
+
+        # Generate response
+        response = agent.generate_response(test_prompt)
+        return response
+    except Exception as e:
+        return f"Error testing agent: {str(e)}"
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Fetch GitLab Merge Request details and generate learning sheet.")
-    parser.add_argument("project_id", help="GitLab project ID (numeric or path)")
-    parser.add_argument("mr_number", help="Merge Request number (IID)")
+    parser.add_argument("project_id", nargs='?', help="GitLab project ID (numeric or path)")
+    parser.add_argument("mr_number", nargs='?', help="Merge Request number (IID)")
     parser.add_argument("--learning-sheet", action="store_true",
                        help="Generate AI learning sheet from MR details")
+    parser.add_argument("--review", action="store_true",
+                       help="Generate AI code review from MR details")
+    parser.add_argument("--review-context", metavar="FILE.md",
+                       help="Markdown file to include as additional context for code review")
+    parser.add_argument("--test", action="store_true",
+                       help="Test the AI agent with a simple prompt")
     parser.add_argument("--output-file", help="Output file to save the learning sheet")
     args = parser.parse_args()
+
+    # Handle test mode first
+    if args.test:
+        print("Testing AI agent...")
+        test_result = test_agent()
+        print("\n" + "="*50)
+        print("AGENT TEST RESULT")
+        print("="*50)
+        print(test_result)
+        exit(0)
+
+    # For non-test modes, require project_id and mr_number
+    if not args.project_id or not args.mr_number:
+        print("Error: project_id and mr_number are required unless using --test")
+        parser.print_help()
+        exit(1)
+
+    # Validate that review-context is only used with review
+    if args.review_context and not args.review:
+        print("Error: --review-context can only be used with --review")
+        parser.print_help()
+        exit(1)
+
+    # Read additional context if provided
+    additional_context = None
+    if args.review_context:
+        try:
+            with open(args.review_context, 'r', encoding='utf-8') as f:
+                additional_context = f.read()
+            print(f"Loaded additional context from: {args.review_context}")
+        except Exception as e:
+            print(f"Error reading context file '{args.review_context}': {e}")
+            exit(1)
 
     client_project = get_gitlab_client(args.project_id)
     if not client_project:
@@ -390,5 +521,25 @@ if __name__ == "__main__":
             print("LEARNING SHEET")
             print("="*50)
             print(learning_sheet)
+    elif args.review:
+        print("Generating code review...")
+        code_review = generate_code_review(details, additional_context)
+
+        if args.output_file:
+            try:
+                with open(args.output_file, 'w', encoding='utf-8') as f:
+                    f.write(code_review)
+                print(f"Code review saved to: {args.output_file}")
+            except Exception as e:
+                print(f"Error saving code review to file: {e}")
+                print("\n" + "="*50)
+                print("CODE REVIEW")
+                print("="*50)
+                print(code_review)
+        else:
+            print("\n" + "="*50)
+            print("CODE REVIEW")
+            print("="*50)
+            print(code_review)
     else:
         print(details["markdown"])
